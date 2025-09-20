@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breast Cancer Prediction AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="background-overlay"></div>
+    <div class="container">
+        <header class="animate-on-load">
+            <svg class="logo" xmlns="http://www.w.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-2h2v2zm0-4H9V7h2v6zm4 4h-2v-2h2v2zm0-4h-2V7h2v6z"></path></svg>
+            <h1>Breast Cancer Diagnostic AI</h1>
+            <p class="subtitle">A professional interface to predict tumor status using a Machine Learning model.</p>
+        </header>
+
+        <main>
+            <div class="card form-card animate-on-load">
+                <h2>Patient Data Input</h2>
+                <form id="prediction-form">
+                    <div class="form-grid">
+                        <!-- Input fields will be generated here by JS -->
+                    </div>
+                    <div class="button-group">
+                        <button type="submit" id="submit-button">
+                            <span class="button-text">Analyze & Predict</span>
+                            <div class="spinner"></div>
+                        </button>
+                        <button type="button" id="reset-button">Reset</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Results will be injected here by JavaScript -->
+            <div id="result-container"></div>
+
+        </main>
+
+        <footer class="animate-on-load">
+            <p class="disclaimer">
+                <strong>Disclaimer:</strong> This tool provides a prediction based on a machine learning model and is not a substitute for professional medical diagnosis.
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const chartLabels = [
+                "Clump Thickness", "Uniform Cell Size", "Uniform Cell Shape",
+                "Marginal Adhesion", "Single Epithelial Size", "Bare Nuclei",
+                "Bland Chromatin", "Normal Nucleoli", "Mitoses"
+            ];
+
+            const featureInfo = [
+                { name: "clump_thickness", label: "Clump Thickness", tooltip: "Cancerous cells often form multi-layered clumps. Benign cells are usually in single layers." },
+                { name: "uniform_cell_size", label: "Uniform Cell Size", tooltip: "Cancer cells often show significant variation in size. A higher score means more variation." },
+                { name: "uniform_cell_shape", label: "Uniform Cell Shape", tooltip: "Cancer cells tend to vary in shape and lose their normal boundaries." },
+                { name: "marginal_adhesion", label: "Marginal Adhesion", tooltip: "Normal cells stick together. Cancer cells lose this ability, leading to higher adhesion." },
+                { name: "single_epithelial_size", label: "Single Epithelial Size", tooltip: "Epithelial cells are often larger when they are cancerous." },
+                { name: "bare_nuclei", label: "Bare Nuclei", tooltip: "Nuclei not surrounded by cytoplasm. They are common in malignant tumors." },
+                { name: "bland_chromatin", label: "Bland Chromatin", tooltip: "Normal chromatin is fine and uniform. In cancer cells, it is coarse and clumped." },
+                { name: "normal_nucleoli", label: "Normal Nucleoli", tooltip: "In cancer cells, the nucleoli (structures in the nucleus) become more prominent." },
+                { name: "mitoses", label: "Mitoses", tooltip: "This measures the rate of cell division (mitosis). A higher rate is indicative of cancer." }
+            ];
+
+            const formGrid = document.querySelector('.form-grid');
+            let chartInstance = null;
+
+            function createInputFields() {
+                let inputHTML = '';
+                featureInfo.forEach(feature => {
+                    inputHTML += `
+                        <div class="input-group">
+                            <label for="${feature.name}">${feature.label}
+                                <div class="tooltip-container"><span class="info-icon">i</span><span class="tooltip-text">${feature.tooltip}</span></div>
+                            </label>
+                            <input type="number" id="${feature.name}" name="${feature.name}" min="1" max="10" value="5" required>
+                        </div>
+                    `;
+                });
+                formGrid.innerHTML = inputHTML;
+            }
+
+            createInputFields();
+
+            const form = document.getElementById('prediction-form');
+            const submitButton = document.getElementById('submit-button');
+            const resetButton = document.getElementById('reset-button');
+            const resultContainer = document.getElementById('result-container');
+
+            resetButton.addEventListener('click', () => {
+                form.querySelectorAll('input[type="number"]').forEach(input => {
+                    input.value = 5;
+                });
+                resultContainer.innerHTML = '';
+            });
+
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                submitButton.classList.add('loading');
+                resultContainer.innerHTML = '';
+
+                const formData = new FormData(form);
+
+                try {
+                    const response = await fetch('/predict', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    
+                    const data = await response.json();
+                    displayResults(data);
+
+                } catch (error) {
+                    resultContainer.innerHTML = `<div class="card error-card"><p>An error occurred: ${error.message}</p></div>`;
+                } finally {
+                    submitButton.classList.remove('loading');
+                }
+            });
+
+            function displayResults(data) {
+                const resultHTML = `
+                    <div class="card result-card ${data.result_class} animate-result">
+                        <div class="result-grid">
+                            <div class="result-summary">
+                                <h2>Prediction Result</h2>
+                                <p class="prediction-text">${data.prediction_text}</p>
+                                <p class="confidence-score">${data.confidence_score}</p>
+                            </div>
+                            <div class="thermograph-container">
+                                <h3>Generated Thermograph</h3>
+                                <img src="${data.thermograph_image_data}" alt="Generated Breast Thermograph" class="thermograph-image">
+                            </div>
+                            <div class="chart-container">
+                                <h3>Feature Analysis</h3>
+                                <canvas id="resultChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                resultContainer.innerHTML = resultHTML;
+                renderChart(data.input_data, data.result_class);
+            }
+
+            function renderChart(inputData, resultClass) {
+                const chartCanvas = document.getElementById('resultChart');
+                if (chartInstance) {
+                    chartInstance.destroy();
+                }
+                const isMalignant = resultClass.includes('malignant');
+                const chartColor = isMalignant ? 'rgba(217, 33, 33, 0.2)' : 'rgba(13, 138, 107, 0.2)';
+                const chartBorderColor = isMalignant ? 'rgba(217, 33, 33, 1)' : 'rgba(13, 138, 107, 1)';
+                
+                chartInstance = new Chart(chartCanvas.getContext('2d'), {
+                    type: 'radar',
+                    data: {
+                        labels: chartLabels,
+                        datasets: [{
+                            label: 'Patient Input Values',
+                            data: inputData,
+                            backgroundColor: chartColor,
+                            borderColor: chartBorderColor,
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: { r: { suggestedMin: 0, suggestedMax: 10 } },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
+
